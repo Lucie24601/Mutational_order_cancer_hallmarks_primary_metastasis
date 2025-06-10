@@ -1,0 +1,658 @@
+---
+title: "Hartwig_clean"
+output: html_document
+date: "2025-06-10"
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(ggpubr)
+library(ggrepel)
+library(ggstatsplot)
+library(ggeasy)
+library(tidyr)
+library(dplyr)
+library(writexl)
+library(dndscv)
+library("plotrix")
+load("/Aim2_HallmarkTime/VAF_cancer_hallmarks/Relevant_analysis/Data/drivergenes.RData")
+load("/Aim2_HallmarkTime/VAF_cancer_hallmarks/Relevant_analysis/Data/list_names.RData")
+load("//Dropbox/Aim2_HallmarkTime/VAF_cancer_hallmarks/OLD/VAF_analysis/final_hartwig_data.RData")
+load("//Dropbox/Aim2_HallmarkTime/Extra/Hartwig/vaf_all_patients_hartwig.RData")
+df.clin<-read.table("//Dropbox/Projects/DriverLandscape/SupportingTables/tcga_clinicaldata.tsv",header=T,sep="\t")
+load("//Dropbox/Aim2_HallmarkTime/VAF_cancer_hallmarks/Relevant_analysis/Data/RefCDS_human_GRCh37_dNdScv.0.1.0.rda")
+refdb_run =RefCDS
+```
+
+```{r}
+library(readxl)
+Gene_list_of_cancer_hallmarks <- read_excel("/Aim2_HallmarkTime/VAF_cancer_hallmarks/Relevant_analysis/Data/Gene_list_of_cancer_hallmarks.xlsx")
+#convert genes to ensembl id
+library(biomaRt)
+hsapiens_genes <- getBM(attributes = c("ensembl_gene_id", 
+                                       "hgnc_symbol"),
+                        mart = useMart("ensembl", dataset = "hsapiens_gene_ensembl"))
+
+all_hallmarks <- hsapiens_genes %>%filter(hsapiens_genes$hgnc_symbol %in% Gene_list_of_cancer_hallmarks$ALL) 
+all_hallmarks<-  unique(all_hallmarks$hgnc_symbol)
+all_hallmarks<-as.data.frame(all_hallmarks)
+
+angiogenesis <- hsapiens_genes %>%filter(hsapiens_genes$hgnc_symbol %in% Gene_list_of_cancer_hallmarks$ANGIOGENESIS) 
+angiogenesis<-  unique(angiogenesis$hgnc_symbol)
+angiogenesis<-as.data.frame(angiogenesis)
+angiogenesis<-angiogenesis%>%filter(angiogenesis %in% list_names$list_names)
+
+
+metabolism <- hsapiens_genes %>%filter(hsapiens_genes$hgnc_symbol %in% Gene_list_of_cancer_hallmarks$METABOLISM) 
+metabolism<-  unique(metabolism$hgnc_symbol)
+metabolism<-as.data.frame(metabolism)
+
+
+death <- hsapiens_genes %>%filter(hsapiens_genes$hgnc_symbol %in% Gene_list_of_cancer_hallmarks$DEATH) 
+death<-  unique(death$hgnc_symbol)
+death<-as.data.frame(death)
+
+proliferation <- hsapiens_genes %>%filter(hsapiens_genes$hgnc_symbol %in% Gene_list_of_cancer_hallmarks$PROLIFERATION) 
+proliferation<-  unique(proliferation$hgnc_symbol)
+proliferation<-as.data.frame(proliferation)
+
+
+inflammation <- hsapiens_genes %>%filter(hsapiens_genes$hgnc_symbol %in% Gene_list_of_cancer_hallmarks$INFLAMMATION) 
+inflammation<-  unique(inflammation$hgnc_symbol)
+inflammation<-as.data.frame(inflammation)
+
+metastasis <- hsapiens_genes %>%filter(hsapiens_genes$hgnc_symbol %in% Gene_list_of_cancer_hallmarks$METASTASIS) 
+metastasis<-  unique(metastasis$hgnc_symbol)
+metastasis<-as.data.frame(metastasis)
+
+immortality <- hsapiens_genes %>%filter(hsapiens_genes$hgnc_symbol %in% Gene_list_of_cancer_hallmarks$IMMORTALITY) 
+immortality<-  unique(immortality$hgnc_symbol)
+immortality<-as.data.frame(immortality)
+
+
+growth <- hsapiens_genes %>%filter(hsapiens_genes$hgnc_symbol %in% Gene_list_of_cancer_hallmarks$GROWTH) 
+growth<-  unique(growth$hgnc_symbol)
+growth<-as.data.frame(growth)
+
+
+immune <- hsapiens_genes %>%filter(hsapiens_genes$hgnc_symbol %in% Gene_list_of_cancer_hallmarks$IMMUNE) 
+immune<-  unique(immune$hgnc_symbol)
+immune<-as.data.frame(immune)
+
+mutations <- hsapiens_genes %>%filter(hsapiens_genes$hgnc_symbol %in% Gene_list_of_cancer_hallmarks$MUTATIONS) 
+mutations<-  unique(mutations$hgnc_symbol)
+mutations<-as.data.frame(mutations)
+
+
+escape_genes = readxl::read_xlsx("/Projects/DriverLandscape/Data/SuppTable3_escapegenes_Aug2021.xlsx")
+colnames(escape_genes)<-"escape"
+
+#filter
+death<-death%>%filter(death %in% list_names$list_names)
+growth<-growth%>%filter(growth %in% list_names$list_names)
+immune<-immune%>%filter(immune %in% list_names$list_names)
+immortality<-immortality%>%filter(immortality %in% list_names$list_names)
+inflammation<-inflammation%>%filter(inflammation %in% list_names$list_names)
+metabolism<-metabolism%>%filter(metabolism %in% list_names$list_names)
+metastasis<-metastasis%>%filter(metastasis %in% list_names$list_names)
+mutations<-mutations%>%filter(mutations %in% list_names$list_names)
+proliferation<-proliferation%>%filter(proliferation %in% list_names$list_names)
+angiogenesis<-angiogenesis%>%filter(angiogenesis %in% list_names$list_names)
+
+```
+
+```{r VAF for pancancer Fig 5D}
+setwd("//Dropbox/Aim2_HallmarkTime/Hartwig")
+
+final_hartwig_data<-final_hartwig_data %>% dplyr::mutate(mutations=ifelse(gene %in% mutations$mutations,"YES","NO"))
+final_hartwig_data<-final_hartwig_data %>% dplyr::mutate(death=ifelse(gene %in% death$death,"YES","NO"))
+final_hartwig_data<-final_hartwig_data %>% dplyr::mutate(immune=ifelse(gene %in% immune$immune,"YES","NO"))
+final_hartwig_data<-final_hartwig_data %>% dplyr::mutate(immortality=ifelse(gene %in% immortality$immortality,"YES","NO"))
+final_hartwig_data<-final_hartwig_data %>% dplyr::mutate(growth=ifelse(gene %in% growth$growth,"YES","NO"))
+final_hartwig_data<-final_hartwig_data %>% dplyr::mutate(inflammation=ifelse(gene %in% inflammation$inflammation,"YES","NO"))
+final_hartwig_data<-final_hartwig_data %>% dplyr::mutate(metabolism=ifelse(gene %in% metabolism$metabolism,"YES","NO"))
+final_hartwig_data<-final_hartwig_data %>% dplyr::mutate(metastasis=ifelse(gene %in% metastasis$metastasis,"YES","NO"))
+final_hartwig_data<-final_hartwig_data %>% dplyr::mutate(proliferation=ifelse(gene %in% proliferation$proliferation,"YES","NO"))
+final_hartwig_data<-final_hartwig_data %>% dplyr::mutate(angiogenesis=ifelse(gene %in% angiogenesis$angiogenesis,"YES","NO"))
+
+primary_plot<-final_hartwig_data%>%dplyr::filter(impact %in% c("Missense", "Nonsense","Essential_Splice","Stop_loss"))%>%dplyr::filter(gene %in% list_names$list_names)
+
+#create 
+df_angiogenesis<-primary_plot%>% dplyr::filter(angiogenesis=="YES")%>% dplyr::select(sampleID, gene, VAF,  angiogenesis)
+df_angiogenesis$angiogenesis<-"angiogenesis"
+colnames(df_angiogenesis)[colnames(df_angiogenesis) == 'angiogenesis'] <- 'category'
+
+
+df_mutations<-primary_plot%>% filter(mutations=="YES")%>% dplyr::select(sampleID, gene, VAF,  mutations)
+df_mutations$mutations<-"genome instability"
+colnames(df_mutations)[colnames(df_mutations) == 'mutations'] <- 'category'
+
+df_growth<-primary_plot%>% filter(growth=="YES")%>% dplyr::select(sampleID, gene, VAF,  growth)
+df_growth$growth<-"growth"
+colnames(df_growth)[colnames(df_growth) == 'growth'] <- 'category'
+
+df_immortality<-primary_plot%>% filter(immortality=="YES")%>% dplyr::select(sampleID, gene, VAF,  immortality)
+df_immortality$immortality<-"immortality"
+colnames(df_immortality)[colnames(df_immortality) == 'immortality'] <- 'category'
+
+df_metastasis<-primary_plot%>% filter(metastasis=="YES")%>% dplyr::select(sampleID, gene, VAF,  metastasis)
+df_metastasis$metastasis<-"metastasis"
+colnames(df_metastasis)[colnames(df_metastasis) == 'metastasis'] <- 'category'
+
+
+df_inflammation<-primary_plot%>% filter(inflammation=="YES")%>% dplyr::select(sampleID, gene, VAF,  inflammation)
+df_inflammation$inflammation<-"inflammation"
+colnames(df_inflammation)[colnames(df_inflammation) == 'inflammation'] <- 'category'
+
+df_proliferation<-primary_plot%>% filter(proliferation=="YES")%>% dplyr::select(sampleID, gene, VAF,  proliferation)
+df_proliferation$proliferation<-"proliferation"
+colnames(df_proliferation)[colnames(df_proliferation) == 'proliferation'] <- 'category'
+
+df_death<-primary_plot%>% filter(death=="YES")%>% dplyr::select(sampleID, gene, VAF,  death)
+df_death$death<-"death"
+colnames(df_death)[colnames(df_death) == 'death'] <- 'category'
+
+df_metabolism<-primary_plot%>% filter(metabolism=="YES")%>% dplyr::select(sampleID, gene, VAF,  metabolism)
+df_metabolism$metabolism<-"metabolism"
+colnames(df_metabolism)[colnames(df_metabolism) == 'metabolism'] <- 'category'
+
+df_immune<-primary_plot%>% filter(immune=="YES")%>% dplyr::select(sampleID, gene, VAF,  immune)
+df_immune$immune<-"immune evasion"
+colnames(df_immune)[colnames(df_immune) == 'immune'] <- 'category'
+
+
+
+df_density<-rbind(df_angiogenesis, df_metabolism, df_death, df_proliferation, df_inflammation, df_metastasis, df_immortality, df_growth, df_immune, df_mutations)
+
+#function to calculate mean and sd
+data_summary <- function(data, varname, groupnames){
+  require(plyr)
+  summary_func <- function(x, col){
+    c(mean = mean(x[[col]], na.rm=TRUE),
+      std.error = std.error(x[[col]], na.rm=TRUE))
+  }
+  data_sum<-ddply(data, groupnames, .fun=summary_func,
+                  varname)
+  data_sum <- rename(data_sum, c("mean" = varname))
+ return(data_sum)
+}
+colnames(df_density)[colnames(df_density) == 'DNA_VAF'] <- 'VAF'
+
+df_VAF<- data_summary(df_density, varname="VAF", 
+                    groupnames= "category")
+
+
+p1<-ggplot(df_VAF, aes(x= reorder(category, -VAF), y = VAF), color=category)+
+  geom_errorbar(aes(ymin=VAF-std.error, ymax=VAF+std.error, color=category), width=0, position=position_dodge(0.78))+ rotate_x_text(45) +   
+  geom_point(position = position_dodge(0.78), size = 1.5) +  cowplot::theme_cowplot()+theme(legend.position="none")+scale_y_log10()+xlab(NULL) +ylab("VAF")+ scale_color_manual(breaks = c("genome instability", "immortality", "metabolism", "angiogenesis","growth", "death","proliferation", "metastasis", "immune evasion", "inflammation"), values =c( "purple", "turquoise", "magenta", "red", "brown","blue", "pink", "yellow", "orange", "green") )+
+  theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1))
+
+ggsave("VAF_pancancer_Hartwig.pdf",plot = p1, units = "cm",height = 12, width = 16)
+```
+
+```{r prepare per cancer type analysis}
+metadata_hartwig <- read_tsv('//Dropbox/Aim2_HallmarkTime/Extra/Hartwig/metadata.tsv')
+
+
+
+# Join the dataframes
+# Note that the column names have different cases: "sampleid" vs "sampleID"
+joined_hartwig_data <- merge(metadata_hartwig, 
+                             final_hartwig_data, 
+                             by.x = "sampleId", 
+                             by.y = "sampleID", 
+                             all = FALSE)
+```
+
+```{r Per cancer type heatmap Fig 4C}
+#function to extract VAF of every cancer hallmark
+extract_VAF <- function(cancer="Colon"){
+  # Filter the data for the specified cancer type
+  primary_plot <- joined_hartwig_data %>% 
+    dplyr::filter(impact %in% c("Missense", "Nonsense", "Essential_Splice", "Stop_loss")) %>% 
+    dplyr::filter(gene %in% list_names$list_names) %>% 
+    dplyr::filter(primaryTumorLocation == cancer)
+  # Check if we have any data after filtering
+  if(nrow(primary_plot) == 0) {
+    return(data.frame(VAF = numeric(0)))
+  }
+  # Initialize an empty dataframe to store results
+  df_density <- data.frame()
+  # Helper function to safely process each category
+  safe_process <- function(category_column, category_name) {
+    tryCatch({
+      if(category_column %in% colnames(primary_plot)) {
+        filtered <- primary_plot %>% 
+          dplyr::filter(!!sym(category_column) == "YES") %>% 
+          dplyr::select(sampleId, gene, VAF, primaryTumorLocation, !!sym(category_column))
+        
+        if(nrow(filtered) > 0) {
+          filtered[[category_column]] <- category_name
+          colnames(filtered)[colnames(filtered) == category_column] <- 'category'
+          return(filtered)
+        }
+      }
+      return(NULL)
+    }, error = function(e) {
+      message(paste("Error processing", category_name, ":", e$message))
+      return(NULL)
+    })
+  }
+  # Process each category
+  categories <- list(
+    c("angiogenesis", "angiogenesis"),
+    c("mutation", "genome instability"),
+    c("growth", "growth"),
+    c("immortality", "immortality"),
+    c("metastasis", "metastasis"),
+    c("inflammation", "inflammation"),
+    c("proliferation", "proliferation"),
+    c("death", "death"),
+    c("metabolism", "metabolism"),
+    c("immune", "immune evasion")
+  )
+  # Process each category and combine results
+  for(cat in categories) {
+    result <- safe_process(cat[1], cat[2])
+    if(!is.null(result)) {
+      df_density <- rbind(df_density, result)
+    }
+  }
+  # If we have data, calculate summary
+  if(nrow(df_density) > 0) {
+    tryCatch({
+      df_VAF <- data_summary(df_density, varname="VAF", groupnames="category")
+      df_VAF <- as.data.frame(df_VAF[, 2])
+      colnames(df_VAF) <- "VAF"
+      # Add category names as row names
+      if(nrow(df_VAF) > 0) {
+        rownames(df_VAF) <- unique(df_density$category)
+      }
+      return(df_VAF)
+    }, error = function(e) {
+      message(paste("Error in data_summary:", e$message))
+      return(data.frame(VAF = numeric(0)))
+    })
+  } else {
+    return(data.frame(VAF = numeric(0)))
+  }
+}
+
+# Simplified function to process all cancer types
+process_all_cancer_types <- function() {
+  cancer_types <- unique(joined_hartwig_data$primaryTumorLocation)
+  all_results <- list()
+  for(cancer in cancer_types) {
+    message("Processing cancer type:", cancer)
+    # Try to extract VAF for this cancer type
+    result <- tryCatch({
+      vaf_result <- extract_VAF(cancer=cancer)
+      # Only keep results if we have data
+      if(nrow(vaf_result) > 0) {
+        message("  Success! Found", nrow(vaf_result), "categories.")
+        vaf_result
+      } else {
+        message("  No data found for this cancer type")
+        NULL
+      }
+    }, error = function(e) {
+      message("  Error processing cancer type:", cancer, "-", e$message)
+      NULL
+    })
+    # Add result to list if not NULL
+    if(!is.null(result)) {
+      all_results[[cancer]] <- result
+    }
+  }
+  return(all_results)
+}
+
+# Run the function and store results
+all_cancer_results <- process_all_cancer_types()
+
+# Print a summary of the results
+summary_df <- data.frame(
+  cancer_type = names(all_cancer_results),
+  num_categories = sapply(all_cancer_results, nrow)
+)
+
+
+# 1. First, convert the list of results into a matrix format
+create_vaf_matrix <- function(all_cancer_results) {
+  # Get all unique categories across all cancer types
+  all_categories <- unique(unlist(lapply(all_cancer_results, function(df) rownames(df))))
+  # Create empty matrix with the right dimensions
+  vaf_matrix <- matrix(NA, nrow = length(all_categories), ncol = length(all_cancer_results))
+  # Set row and column names
+  rownames(vaf_matrix) <- all_categories
+  colnames(vaf_matrix) <- names(all_cancer_results)
+  # Fill in the matrix with VAF values
+  for (i in 1:length(all_cancer_results)) {
+    cancer_type <- names(all_cancer_results)[i]
+    cancer_data <- all_cancer_results[[i]]
+    # Fill in values for this cancer type
+    for (category in rownames(cancer_data)) {
+      if (category %in% rownames(vaf_matrix)) {
+        vaf_matrix[category, cancer_type] <- cancer_data[category, "VAF"]
+      }
+    }
+  }
+  return(vaf_matrix)
+}
+
+# 2. Create the VAF matrix
+cancer_types_vaf <- create_vaf_matrix(all_cancer_results)
+
+# 3. Handle missing values (optional)
+# Replace NA with mean of the row, or 0, depending on what makes sense for your analysis
+cancer_types_vaf[is.na(cancer_types_vaf)] <- 0  # Replace NA with 0, or use another approach
+
+# 4. Reorder categories if needed (based on your example)
+desired_order <- c("angiogenesis", "death", "growth", "immune evasion", 
+                   "immortality", "inflammation", "metabolism", 
+                   "metastasis", "genome instability", "proliferation")
+
+# 5. Create transposed data frame for export
+cancer_mean_VAF <- as.data.frame(t(cancer_types_vaf))
+cancer_mean_VAF <- cancer_mean_VAF[, sort(names(cancer_mean_VAF))]
+cancer_mean_VAF$cancer_type <- rownames(cancer_mean_VAF)
+
+# 7. Calculate correlation matrix
+cor_matrix <- cor(cancer_types_vaf, method = "spearman", use = "pairwise.complete.obs")
+
+# 8. Generate heatmap
+library(pheatmap)
+breaks <- seq(-1, 1, length.out = 100)
+p <- pheatmap(cor_matrix, cluster_rows = TRUE, cluster_cols = TRUE, upper = FALSE, breaks = breaks)
+#ggsave("Correlation_cancer_types_VAF_Hartwig.pdf",plot = p, units = "cm",height = 18, width = 20)
+```
+
+```{r mean VAF per patient}
+# List to store the results for each patient
+vaf_list <- list()
+
+# Get the unique patient IDs from the sampleID column
+patient_ids <- unique(final_hartwig_data$sampleID)
+
+# Loop over each patient ID
+for (patient in patient_ids) {
+  # Filter the data for the current patient
+  primary_plot <- final_hartwig_data %>%
+    dplyr::filter(impact %in% c("Missense", "Nonsense","Essential_Splice","Stop_loss")) %>%
+    dplyr::filter(gene %in% list_names$list_names) %>%
+    dplyr::filter(sampleID == patient)
+  # Create data frames for different categories, with checks for non-empty data frames
+  print(patient)
+  # Angiogenesis
+  df_angiogenesis <- primary_plot %>%
+    dplyr::filter(angiogenesis == "YES") %>%
+    dplyr::select(sampleID, gene, VAF, angiogenesis)
+  if (nrow(df_angiogenesis) > 0) {
+    df_angiogenesis$angiogenesis <- "angiogenesis"
+    colnames(df_angiogenesis)[colnames(df_angiogenesis) == 'angiogenesis'] <- 'category'
+  } else {
+    df_angiogenesis <- NULL
+  }
+  # Mutations (changed to 'mutation')
+  df_mutations <- primary_plot %>%
+    dplyr::filter(mutations == "YES") %>%
+    dplyr::select(sampleID, gene, VAF, mutations)
+  if (nrow(df_mutations) > 0) {
+    df_mutations$mutations <- "genome instability"
+    colnames(df_mutations)[colnames(df_mutations) == 'mutations'] <- 'category'
+  } else {
+    df_mutations <- NULL
+  }
+  # Growth
+  df_growth <- primary_plot %>%
+    dplyr::filter(growth == "YES") %>%
+    dplyr::select(sampleID, gene, VAF, growth)
+  if (nrow(df_growth) > 0) {
+    df_growth$growth <- "growth"
+    colnames(df_growth)[colnames(df_growth) == 'growth'] <- 'category'
+  } else {
+    df_growth <- NULL
+  }
+  # Immortality
+  df_immortality <- primary_plot %>%
+    dplyr::filter(immortality == "YES") %>%
+    dplyr::select(sampleID, gene, VAF, immortality)
+  if (nrow(df_immortality) > 0) {
+    df_immortality$immortality <- "immortality"
+    colnames(df_immortality)[colnames(df_immortality) == 'immortality'] <- 'category'
+  } else {
+    df_immortality <- NULL
+  }
+  # Metastasis
+  df_metastasis <- primary_plot %>%
+    dplyr::filter(metastasis == "YES") %>%
+    dplyr::select(sampleID, gene, VAF, metastasis)
+  if (nrow(df_metastasis) > 0) {
+    df_metastasis$metastasis <- "metastasis"
+    colnames(df_metastasis)[colnames(df_metastasis) == 'metastasis'] <- 'category'
+  } else {
+    df_metastasis <- NULL
+  }
+  # Inflammation
+  df_inflammation <- primary_plot %>%
+    dplyr::filter(inflammation == "YES") %>%
+    dplyr::select(sampleID, gene, VAF, inflammation)
+  if (nrow(df_inflammation) > 0) {
+    df_inflammation$inflammation <- "inflammation"
+    colnames(df_inflammation)[colnames(df_inflammation) == 'inflammation'] <- 'category'
+  } else {
+    df_inflammation <- NULL
+  }
+  # Proliferation
+  df_proliferation <- primary_plot %>%
+    dplyr::filter(proliferation == "YES") %>%
+    dplyr::select(sampleID, gene, VAF, proliferation)
+  if (nrow(df_proliferation) > 0) {
+    df_proliferation$proliferation <- "proliferation"
+    colnames(df_proliferation)[colnames(df_proliferation) == 'proliferation'] <- 'category'
+  } else {
+    df_proliferation <- NULL
+  }
+  # Death
+  df_death <- primary_plot %>%
+    dplyr::filter(death == "YES") %>%
+    dplyr::select(sampleID, gene, VAF, death)
+  if (nrow(df_death) > 0) {
+    df_death$death <- "death"
+    colnames(df_death)[colnames(df_death) == 'death'] <- 'category'
+  } else {
+    df_death <- NULL
+  }
+  # Metabolism
+  df_metabolism <- primary_plot %>%
+    dplyr::filter(metabolism == "YES") %>%
+    dplyr::select(sampleID, gene, VAF, metabolism)
+  if (nrow(df_metabolism) > 0) {
+    df_metabolism$metabolism <- "metabolism"
+    colnames(df_metabolism)[colnames(df_metabolism) == 'metabolism'] <- 'category'
+  } else {
+    df_metabolism <- NULL
+  }
+  # Immune evasion
+  df_immune <- primary_plot %>%
+    dplyr::filter(immune == "YES") %>%
+    dplyr::select(sampleID, gene, VAF, immune)
+  if (nrow(df_immune) > 0) {
+    df_immune$immune <- "immune evasion"
+    colnames(df_immune)[colnames(df_immune) == 'immune'] <- 'category'
+  } else {
+    df_immune <- NULL
+  }
+  # Combine all data frames (only if they have data)
+  df_density <- rbind(
+    df_angiogenesis, df_metabolism, df_death, df_proliferation, df_inflammation,
+    df_metastasis, df_immortality, df_growth, df_immune, df_mutations
+  )
+  # Check if df_density has rows before proceeding
+  if (!is.null(df_density) && nrow(df_density) > 0) {
+    # Rename 'VAF' to 'VAF'
+    colnames(df_density)[colnames(df_density) == 'VAF'] <- 'VAF'
+    
+    # Summarize the data by category
+    df_VAF <- data_summary(df_density, varname = "VAF", groupnames = "category")
+    
+    # Add the patient ID to the result
+    df_VAF$patient <- patient
+    
+    # Store the result in the list
+    vaf_list[[patient]] <- df_VAF
+  }
+}
+# Combine all results into a single data frame
+vaf_all_patients_hartwig <- do.call(rbind, vaf_list)
+
+
+
+# Reshape the dataframe
+all_patient_trajectories_hartwig <- vaf_all_patients_hartwig %>%
+  pivot_wider(
+    id_cols = patient,
+    names_from = category,
+    values_from = VAF
+  ) %>%
+  column_to_rownames(var = "patient")
+colnames(all_patient_trajectories_hartwig)[colnames(all_patient_trajectories_hartwig) == "genome instability"] <- "mutations"
+# Replace NA with 0 or another appropriate value
+all_patient_trajectories_hartwig[is.na(all_patient_trajectories_hartwig)] <- 0
+```
+
+
+```{r rank frequency per patient Fig 2E}
+
+# Calculate the number of zeros in each row
+num_zeros <- apply(all_patient_trajectories_hartwig, 1, function(row) sum(row == 0))
+
+# Remove rows where 3 or more elements are zero
+all_patient_trajectories_hartwig_filt <- all_patient_trajectories_hartwig[num_zeros < 2, ]
+
+# Dont removre rows and keep all the data
+all_patient_trajectories_hartwig_RANK <- t(as.data.frame(apply(all_patient_trajectories_hartwig, 1, function(x) rank(-x, ties.method = "min"))))
+all_patient_trajectories_hartwig_RANK<-as.data.frame(all_patient_trajectories_hartwig_RANK)
+all_patient_trajectories_hartwig_RANK_filt<-t(as.data.frame(apply(all_patient_trajectories_hartwig_filt,1,function(x) rank(-x, ties.method = "min"))))
+all_patient_trajectories_hartwig_RANK_filt <- t(as.data.frame(apply(
+  all_patient_trajectories_hartwig_filt, 1, 
+  function(x) rank(-x, ties.method = "random")
+)))
+
+all_patient_trajectories_hartwig_RANK$patient_id<-rownames(all_patient_trajectories_hartwig_RANK)
+
+
+###Define order of hallmarks
+fixed_order <- c("instability", "immortality", "metabolism", "growth", "angiogenesis", 
+                 "death", "metastasis", "proliferation", "inflammation", "immune")
+
+
+# 1. Compute proportions
+prop_df <- as.data.frame(all_patient_trajectories_hartwig_RANK_filt) %>%
+  tidyr::pivot_longer(cols = everything(), names_to = "hallmark", values_to = "rank") %>% 
+  dplyr::group_by(rank, hallmark) %>% 
+  dplyr::summarise(count = dplyr::n(), .groups = "drop") %>% 
+  dplyr::group_by(hallmark) %>%
+  dplyr::mutate(proportion = count / sum(count)) %>%
+  dplyr::ungroup()
+
+# 2. Plot proportions
+ggplot(prop_df, aes(x = rank, y = proportion, fill = hallmark)) +
+  geom_bar(stat = "identity", position = "stack") +
+  theme_minimal() +
+  labs(x = "Rank", y = "Proportion", fill = "Hallmark")+
+  facet_wrap(~hallmark, scales = "free_y") +
+  labs(x = "Rank", y = "Proportion") +
+  theme_minimal() 
+```
+
+
+
+```{r  heatmap RANK hartwig Fig 2F}
+# Prepare ranking data for heatmap
+ranking_data <- as.data.frame(all_patient_trajectories_hartwig_RANK_filt)
+
+# Reorder columns according to fixed hallmark order
+column_order <- match(colnames(ranking_data), fixed_order)
+reordered_data <- ranking_data[, order(column_order)]
+
+# Prepare patient annotation
+patient_annotation <- df.clin %>% 
+  column_to_rownames("bcr_patient_barcode") %>% 
+  dplyr::select(type)
+
+# Create heatmap
+pheatmap(reordered_data, scale = "none", cluster_rows = TRUE, cluster_cols = FALSE, show_rownames = FALSE,legend = FALSE,show_colnames = FALSE,display_numbers = FALSE,cutree_rows = 1)
+```
+
+
+```{r dnds on each gene list of hallmarks}
+df_hartwig_angiogenesis_dndscv<-dndscv(final_hartwig_data, refdb = refdb_run ,cv=NULL, gene_list =angiogenesis$angiogenesis)
+df_hartwig_metabolism_dndscv<-dndscv(final_hartwig_data, refdb = refdb_run ,cv=NULL, gene_list =metabolism$metabolism)
+df_hartwig_death_dndscv<-dndscv(final_hartwig_data, refdb = refdb_run ,cv=NULL, gene_list =death$death)
+df_hartwig_proliferation_dndscv<-dndscv(final_hartwig_data, refdb = refdb_run ,cv=NULL, gene_list =proliferation$proliferation)
+df_hartwig_inflammation_dndscv<-dndscv(final_hartwig_data, refdb = refdb_run ,cv=NULL, gene_list =inflammation$inflammation)
+df_hartwig_metastasis_dndscv<-dndscv(final_hartwig_data, refdb = refdb_run ,cv=NULL,gene_list =metastasis$metastasis)
+df_hartwig_immortality_dndscv<-dndscv(final_hartwig_data, refdb = refdb_run ,cv=NULL, gene_list =immortality$immortality)
+df_hartwig_growth_dndscv<-dndscv(final_hartwig_data, refdb = refdb_run ,cv=NULL, gene_list =growth$growth)
+df_hartwig_immune_dndscv<-dndscv(final_hartwig_data, refdb = refdb_run ,cv=NULL, gene_list =immune$immune)
+df_hartwig_mutations_dndscv<-dndscv(final_hartwig_data, refdb = refdb_run ,cv=NULL, gene_list =mutations$mutations)
+
+
+```
+
+
+
+```{r dn/dS of hallmarks Fig 6D}
+plotdnds<-function(x){
+  df_1<-x$globaldnds
+  Globaldnds<- c(df_1[1,2])
+  dndshigh<- c(df_1[1,4])
+  dndslow<- c(df_1[1,3])
+  df_x <- data.frame(Globaldnds, dndshigh, dndslow)
+  return(df_x)
+}
+
+p_angiogenesis<-plotdnds(x =df_hartwig_angiogenesis_dndscv)
+p_angiogenesis$Hallmark<-"angiogenesis"
+
+p_mutations<-plotdnds(x =df_hartwig_mutations_dndscv)
+p_mutations$Hallmark<-"genome instability"
+
+p_immune<-plotdnds(x =df_hartwig_immune_dndscv)
+p_immune$Hallmark<-"immune evasion"
+
+p_growth<-plotdnds(x =df_hartwig_growth_dndscv)
+p_growth$Hallmark<-"growth"
+
+p_immortality<-plotdnds(x =df_hartwig_immortality_dndscv)
+p_immortality$Hallmark<-"immortality"
+
+p_metastasis<-plotdnds(x =df_hartwig_metastasis_dndscv)
+p_metastasis$Hallmark<-"metastasis"
+
+p_inflammation<-plotdnds(x =df_hartwig_inflammation_dndscv)
+p_inflammation$Hallmark<-"inflammation"
+
+p_proliferation<-plotdnds(x =df_hartwig_proliferation_dndscv)
+p_proliferation$Hallmark<-"proliferation"
+
+p_death<-plotdnds(x =df_hartwig_death_dndscv)
+p_death$Hallmark<-"death"
+
+p_metabolism<-plotdnds(x =df_hartwig_metabolism_dndscv)
+p_metabolism$Hallmark<-"metabolism"
+
+p_hallmarks<-rbind(p_metabolism, p_death, p_proliferation, p_inflammation, p_metastasis, p_immortality, p_growth, p_immune, p_mutations, p_angiogenesis)
+
+Pancancer<-ggplot(p_hallmarks, aes(x= reorder(Hallmark, -Globaldnds), y = Globaldnds), color=Hallmark)+
+  geom_errorbar(aes(ymin=dndslow, ymax=dndshigh, color=Hallmark), width=0, position=position_dodge(0.78))+ rotate_x_text(45) +   
+  geom_point(position = position_dodge(0.78), size = 1.5) +  cowplot::theme_cowplot()+ geom_hline(yintercept=1, linetype="dashed", color = "red")+theme(legend.position="none")+scale_y_log10()+xlab(NULL) +ylab("dN/dS") +
+  ggeasy::easy_center_title() + scale_color_manual(breaks = c("genome instability", "immortality", "metabolism", "angiogenesis","growth", "death","proliferation", "metastasis", "immune evasion", "inflammation"), values =c( "purple", "turquoise", "magenta", "red", "brown","blue","pink", "yellow", "orange", "green") )+
+  theme(axis.text.x = element_text(angle=90, vjust=.5, hjust=1))
+
+ggsave("Global_dnds_pancancer_hartwig_metastasis.pdf",plot = Pancancer, units = "cm",height = 12, width = 16)
+
+```
+
